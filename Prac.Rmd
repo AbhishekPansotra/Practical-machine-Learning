@@ -1,0 +1,134 @@
+---
+title: "Assignment - Practical Machine Learning using R"
+author: "Abhishek Pansotra"
+date: "August 9, 2016"
+output: html_document
+---
+
+## Problem Statement
+Physical exercise is the planned and repetitive bodily activity that is done to gain good health or to maintain physical and mental fitness. It has been a very mandatory part for current generation for healthy life. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it.
+We can collect a large amount of data using the Wearable Device available in the market. Data collected by these devices can be collected and used to make predictions about the activity the wearer performs at the time of specific exercising measurements. This project is an attempt to analyze and build such a prediction model using techniques of Practical Machine Learning. The resulting predictor was able to predict 20 out of 20 test values.
+
+##Loading Library
+
+Loaded some of the R Libraries which are to be used while analyzing and generating the Predictive model.
+
+```{r}
+library(caret)
+library(randomForest)
+```
+
+## Downloading and Loading the data 
+
+Data to be used in Analysis contains Weight Lifting Excercise Dataset. It is provided by Coursera on below links
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+For Loading the Data into memory I have loaded the files directly from the URL as follows, But you can also opted for downloading files and then Loading into Memory
+
+Along with Loading, I have also converted blank('""'), '#DIV/0' and 'NA' into "NA" which will be removed later on from the Data set.
+
+```{r}
+
+download.file(url="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv",destfile = "data.csv")
+training <- read.csv("data.csv", na.strings = c("NA","#DIV/0!",""))
+
+download.file(url="http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv",destfile = "data1.csv")
+testing <- read.csv("data1.csv", na.strings = c("NA","#DIV/0!",""))
+
+dim(training)
+dim(testing)
+```
+
+Looking into the Dimensions , I found a training data of 19622 observations of 160 variables in training set whereas in testing set 20 observations of 160 variables.
+
+## Partioning the training set into two
+For modelling, I have Partioned the Training data set into two data sets, 60% for mytraining, 40% for mytesting:
+
+```{r}
+inTrain <- createDataPartition(y=training$classe,p=0.60, list= FALSE)
+mytraining <- training[inTrain,]
+mytesting <- training[-inTrain,]
+
+dim(mytraining); 
+dim(mytesting);
+
+```
+
+##Cleaning of Data
+
+Both mytraining and mytesting Datasets have 160 variables.We need to remove variables which contains values with "Zero" or "Near Zero vraiance".
+Function nearZeroVar of Caret Package removes predictors that have one unique value across samples (zero variance predictors) and predictors that have both             
+1. Few unique values relative to the number of samples.                             
+2. Large ratio of the frequency of the most common value to the frequency of the        second most common value (near-zero variance predictors).
+
+```{r}
+myDataNZV <- nearZeroVar(mytraining)
+mytraining <- mytraining[,-myDataNZV]
+mytesting <- mytesting[,-myDataNZV]
+dim(mytraining);
+dim(mytesting);
+```
+
+As Mentioned while Loading the Data, we converted blank('""'), '#DIV/0' and 'NA' into 'NA'. Removing variable which contains 90% or more 'NA' in it.
+
+```{r}
+MostNA <- sapply(mytraining,function(x) mean(is.na(x)))>0.90
+mytraining <- mytraining[,MostNA==FALSE]
+mytesting <- mytesting[,MostNA==FALSE]
+```
+
+
+Removing variables which are only being used for identification purpose
+
+```{r}
+Trainset <- mytraining[,-(1:5)]
+Testset <- mytesting[,-(1:5)]
+```
+
+```{r}
+dim(mytraining);dim(mytesting);
+```
+
+## Importance Plot (Random Forest)
+
+Using the Importance Plot and Taking out the top 10 Important variables out of 54.
+This will help in choosing the best prediction variables so as to have a high accuracy with a lesser size of model.
+
+```{r fig.height= 9,fig.width=12}
+set.seed(415)
+fit <- randomForest(classe ~ ., data=Trainset,importance=TRUE,ntree=20)
+varImpPlot(fit)
+```
+
+# Creating the Prediction Model - Random Forest
+
+Training the Predicitive Model on *Classe* variable of Trainset against the 10 variables which were picked from Importance Plot. 
+
+```{r}
+modelfit <- train(classe ~ roll_belt +yaw_belt +num_window +magnet_dumbbell_z +pitch_belt +pitch_forearm+magnet_dumbbell_y+accel_dumbbell_z+magnet_dumbbell_z+magnet_belt_y ,data=Trainset,method="rf")
+```
+
+Predict and generate the Accuracy and confusion matrix for the training set
+
+```{r}
+predModel <- predict(modelfit, Testset)
+confusionMatrix(predModel,Testset$classe)
+```
+
+Observation from Confusion Matrix 
+
+**Accuracy** : 99.66%
+**Out of Sample Error** : 0.34%
+
+# Applying the Selected Model to Test Data
+```{r}
+predModel_test <- predict(modelfit, testing)
+predModel_test
+```
